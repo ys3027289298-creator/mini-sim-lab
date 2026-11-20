@@ -3,6 +3,9 @@
    handles are detected instead of silently reused. */
 #include <stdio.h>
 #include <string.h>
+#ifdef RECON
+#include "../../recon/recon.h"
+#endif
 
 #define POOL_CAP 16
 
@@ -17,6 +20,11 @@ typedef struct {
     int value[POOL_CAP];
     int used;
     int high_water;
+#ifdef RECON
+    long long alloc_count;   /* module's own books, for reconciliation */
+    long long free_count;
+    long long fail_count;
+#endif
 } Pool;
 
 static void pool_init(Pool* p) {
@@ -31,10 +39,18 @@ static Handle pool_alloc(Pool* p, int v) {
             p->value[i] = v;
             p->used++;
             if (p->used > p->high_water) p->high_water = p->used;
+#ifdef RECON
+            p->alloc_count++;
+            recon_log_count(RECON_ITEM_POOL_ALLOCS, 1);
+#endif
             Handle h = { (unsigned)i, p->gen[i] };
             return h;
         }
     }
+#ifdef RECON
+    p->fail_count++;
+    recon_log_count(RECON_ITEM_POOL_FAILED, 1);
+#endif
     Handle bad = { (unsigned)-1, 0 };
     return bad;
 }
@@ -56,9 +72,26 @@ static int pool_free(Pool* p, Handle h) {
     p->in_use[h.index] = 0;
     p->gen[h.index]++;          /* bump so stale handles fail */
     p->used--;
+#ifdef RECON
+    p->free_count++;
+    recon_log_count(RECON_ITEM_POOL_FREES, 1);
+#endif
     return 0;
 }
 
+#ifdef RECON
+/* End-of-frame report: counts come from the module's own books, while the
+ * ledger separately observed each alloc/free event. */
+static void pool_recon_frame(Pool* p) {
+    recon_log_gauge(RECON_ITEM_POOL_USED, p->used);
+    recon_checkpoint_gauge(RECON_ITEM_POOL_USED, p->used);
+    recon_checkpoint_count(RECON_ITEM_POOL_ALLOCS, p->alloc_count);
+    recon_checkpoint_count(RECON_ITEM_POOL_FREES, p->free_count);
+    recon_checkpoint_count(RECON_ITEM_POOL_FAILED, p->fail_count);
+}
+#endif
+
+#ifndef RECON_NO_SELFTEST
 static int failures = 0;
 static void check(const char* name, int ok) {
     printf("%s=%d\n", name, ok ? 1 : 0);
@@ -101,3 +134,4 @@ int main(void) {
     printf("all_ok=%d\n", failures == 0);
     return failures == 0 ? 0 : 1;
 }
+#endif /* RECON_NO_SELFTEST */

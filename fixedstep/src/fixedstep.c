@@ -2,6 +2,9 @@
 /* fixedstep: fixed timestep accumulator with interpolation alpha and catch-up cap. */
 #include <stdio.h>
 #include <math.h>
+#ifdef RECON
+#include "../../recon/recon.h"
+#endif
 
 typedef struct {
     double step;        /* fixed dt */
@@ -28,18 +31,38 @@ static int clock_advance(Clock* c, double frame_dt) {
     while (c->acc >= c->step) {
         if (steps >= c->max_catchup) {
             /* discard the backlog instead of spiralling */
+#ifdef RECON
+            int discard = (int)(c->acc / c->step);
+            c->dropped += discard;
+            recon_log_count(RECON_ITEM_FS_DROPPED, discard);
+#else
             c->dropped += (int)(c->acc / c->step);
+#endif
             c->acc = fmod(c->acc, c->step);
             break;
         }
         c->acc -= c->step;
         steps++;
         c->total_steps++;
+#ifdef RECON
+        recon_log_count(RECON_ITEM_FS_STEPS, 1);
+#endif
     }
     c->alpha = c->step > 0.0 ? c->acc / c->step : 0.0;
     return steps;
 }
 
+#ifdef RECON
+/* End-of-frame report: the module's own cumulative books.  The ledger turns
+ * these into per-frame deltas and compares them with the event stream it
+ * observed independently. */
+static void clock_recon_frame(const Clock* c) {
+    recon_checkpoint_count(RECON_ITEM_FS_STEPS, c->total_steps);
+    recon_checkpoint_count(RECON_ITEM_FS_DROPPED, c->dropped);
+}
+#endif
+
+#ifndef RECON_NO_SELFTEST
 static int failures = 0;
 static void check(const char* name, int ok) {
     printf("%s=%d\n", name, ok ? 1 : 0);
@@ -74,3 +97,4 @@ int main(void) {
     printf("all_ok=%d\n", failures == 0);
     return failures == 0 ? 0 : 1;
 }
+#endif /* RECON_NO_SELFTEST */

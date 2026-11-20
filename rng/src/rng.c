@@ -3,12 +3,31 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#ifdef RECON
+#include "../../recon/recon.h"
+#endif
 
-typedef struct { uint64_t state; } Stream;
+typedef struct {
+    uint64_t state;
+#ifdef RECON
+    long long draw_count;   /* module's own books, for reconciliation */
+    long long range_count;
+#endif
+} Stream;
 
-static void stream_init(Stream* s, uint64_t seed) { s->state = seed; }
+static void stream_init(Stream* s, uint64_t seed) {
+    s->state = seed;
+#ifdef RECON
+    s->draw_count = 0;
+    s->range_count = 0;
+#endif
+}
 
 static uint64_t stream_next(Stream* s) {
+#ifdef RECON
+    s->draw_count++;
+    recon_log_count(RECON_ITEM_RNG_DRAWS, 1);
+#endif
     uint64_t z = (s->state += 0x9E3779B97F4A7C15ULL);
     z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
     z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
@@ -17,6 +36,10 @@ static uint64_t stream_next(Stream* s) {
 
 /* unbiased range via rejection sampling */
 static uint32_t stream_range(Stream* s, uint32_t n) {
+#ifdef RECON
+    s->range_count++;
+    recon_log_count(RECON_ITEM_RNG_RANGES, 1);
+#endif
     if (n == 0) return 0;
     uint32_t limit = UINT32_MAX - (UINT32_MAX % n);
     uint32_t v;
@@ -30,6 +53,15 @@ static Stream stream_fork(const Stream* s, uint64_t tag) {
     return f;
 }
 
+#ifdef RECON
+/* End-of-frame report for one stream: its own cumulative draw/range counts. */
+static void stream_recon_frame(const Stream* s) {
+    recon_checkpoint_count(RECON_ITEM_RNG_DRAWS, s->draw_count);
+    recon_checkpoint_count(RECON_ITEM_RNG_RANGES, s->range_count);
+}
+#endif
+
+#ifndef RECON_NO_SELFTEST
 static int failures = 0;
 static void check(const char* name, int ok) {
     printf("%s=%d\n", name, ok ? 1 : 0);
@@ -77,3 +109,4 @@ int main(void) {
     printf("all_ok=%d\n", failures == 0);
     return failures == 0 ? 0 : 1;
 }
+#endif /* RECON_NO_SELFTEST */
