@@ -1,0 +1,29 @@
+# Combat numbers for the deterministic balance sim.
+# Every key is required; unknown or duplicate keys are errors.
+# Changing a value here is a balance change: run tools/regress.py to see
+# which seeds and metrics shift.
+
+player_hp 1000
+player_atk 60
+player_def 10
+
+enemy_hp 900
+enemy_atk 55
+enemy_def 8
+
+# crit chance in permille, crit multiplier in permille (1000 = x1.0)
+crit_permille 150
+crit_mult_permille 1750
+
+# chance an attack is dodged, in permille
+dodge_permille 80
+
+# damage rolls in [1000-variance, 1000+variance] / 1000
+variance_permille 100
+
+# match shape defaults
+duels_default 200
+max_rounds_default 60
+
+# width of each damage histogram bucket
+hist_width 20
