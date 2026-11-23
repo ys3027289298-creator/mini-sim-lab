@@ -1,0 +1,15 @@
+get_a=1
+get_b=1
+count=1
+free_a=1
+stale_a=1
+reuse_slot=1
+new_gen=1
+stale_still_bad=1
+c_ok=1
+double_free=1
+exhausted=1
+high_water=1
+all_free=1
+handles_stale=1
+all_ok=1

@@ -1,0 +1,7 @@
+# build outputs
+/fixedstep/fixedstep
+/fixedstep/evidence
+/pool/pool
+/pool/evidence
+/rng/rng
+/rng/evidence

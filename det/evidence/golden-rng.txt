@@ -1,0 +1,9 @@
+rng.seed=48f04efcd891b5ed
+rng.draws=500
+rng.state_hash=b25cdaf7b6c26fef
+rng.threads.1.digest=832fac4bd8218efe
+rng.threads.2.digest=832fac4bd8218efe
+rng.threads.4.digest=832fac4bd8218efe
+rng.threads.8.digest=832fac4bd8218efe
+rng.table_equal=1
+rng.table_hash=832fac4bd8218efe

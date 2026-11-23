@@ -1,0 +1,11 @@
+one_step=1
+alpha_zero=1
+half_step=1
+completes=1
+two_steps=1
+catchup_capped=1
+dropped_recorded=1
+alpha_bounded=1
+negative_rejected=1
+zero_step_no_div=1
+all_ok=1

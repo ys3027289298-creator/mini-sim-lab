@@ -1,0 +1,8 @@
+deterministic=1
+snapshot_restores=1
+fork_independent=1
+fork_repeatable=1
+range_bounds=1
+range_zero=1
+long_sequence_same=1
+all_ok=1

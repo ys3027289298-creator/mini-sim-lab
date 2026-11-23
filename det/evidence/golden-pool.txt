@@ -1,0 +1,12 @@
+pool.seed=48f04efcd891b5ed
+pool.ops=400
+pool.salt=0
+pool.used=16
+pool.high_water=16
+pool.state_hash=6ebe0839e7f59bd9
+pool.threads.1.digest=1068b6865ddbfafd
+pool.threads.2.digest=1068b6865ddbfafd
+pool.threads.4.digest=1068b6865ddbfafd
+pool.threads.8.digest=1068b6865ddbfafd
+pool.table_equal=1
+pool.table_hash=1068b6865ddbfafd

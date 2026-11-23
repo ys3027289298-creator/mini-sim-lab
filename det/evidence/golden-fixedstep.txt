@@ -1,0 +1,12 @@
+fixedstep.seed=48f04efcd891b5ed
+fixedstep.step=0.01
+fixedstep.frames=240
+fixedstep.total_steps=189
+fixedstep.dropped=48
+fixedstep.state_hash=e7fe153bea9b6f14
+fixedstep.threads.1.digest=c750c00847c3bf12
+fixedstep.threads.2.digest=c750c00847c3bf12
+fixedstep.threads.4.digest=c750c00847c3bf12
+fixedstep.threads.8.digest=c750c00847c3bf12
+fixedstep.table_equal=1
+fixedstep.table_hash=c750c00847c3bf12
