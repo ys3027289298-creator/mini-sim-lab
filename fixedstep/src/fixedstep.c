@@ -1,27 +1,45 @@
 
 /* fixedstep: fixed timestep accumulator with interpolation alpha and catch-up cap. */
-#include <stdio.h>
+#include "fixedstep.h"
 #include <math.h>
 
-typedef struct {
-    double step;        /* fixed dt */
-    double acc;
-    double alpha;       /* interpolation factor for rendering */
-    int max_catchup;    /* max steps per frame */
-    long long total_steps;
-    int dropped;        /* steps discarded due to catch-up cap */
-} Clock;
-
-static void clock_init(Clock* c, double step, int max_catchup) {
+void clock_init(Clock* c, double step, int max_catchup) {
     c->step = step;
     c->acc = 0.0;
     c->alpha = 0.0;
     c->max_catchup = max_catchup;
     c->total_steps = 0;
     c->dropped = 0;
+    c->step_fp = 0;
+    c->acc_fp = 0;
+#ifdef FIXEDSTEP_LEGACY
+    /* legacy double accumulator; fp fields stay unused */
+    return;
+#else
+    if (step > 0.0)
+        c->step_fp = (long long)llround(step * (double)CLOCK_FP_SCALE);
+#endif
 }
 
-static int clock_advance(Clock* c, double frame_dt) {
+#ifdef FIXEDSTEP_LEGACY
+/* ---- pre-fix implementation, retained for drift reproduction ------------- */
+int clock_drain_ns(Clock* c, long long frame_dt_ns) {
+    if (frame_dt_ns < 0) return -1;
+    return clock_advance_ns(c, frame_dt_ns);
+}
+
+int clock_advance_ns(Clock* c, long long frame_dt_ns) {
+    if (frame_dt_ns < 0) return -1;
+    return clock_advance(c, (double)frame_dt_ns / (double)CLOCK_FP_SCALE);
+}
+
+int clock_unstep(Clock* c, int n) {
+    (void)c; (void)n;
+    /* legacy driver never drains; nothing to rewind */
+    return -1;
+}
+
+int clock_advance(Clock* c, double frame_dt) {
     if (frame_dt < 0.0) return -1;
     c->acc += frame_dt;
     int steps = 0;
@@ -39,38 +57,71 @@ static int clock_advance(Clock* c, double frame_dt) {
     c->alpha = c->step > 0.0 ? c->acc / c->step : 0.0;
     return steps;
 }
+#else
+/* ---- deterministic fixed-point implementation ---------------------------- */
+int clock_advance_ns(Clock* c, long long frame_dt_ns) {
+    if (frame_dt_ns < 0) return -1;
+    if (c->step_fp <= 0) {
+        /* degenerate clock: never step, never divide */
+        c->acc = 0.0;
+        c->alpha = 0.0;
+        return 0;
+    }
 
-static int failures = 0;
-static void check(const char* name, int ok) {
-    printf("%s=%d\n", name, ok ? 1 : 0);
-    if (!ok) failures++;
+    c->acc_fp += frame_dt_ns;
+
+    int steps = 0;
+    while (c->acc_fp >= c->step_fp) {
+        if (steps >= c->max_catchup) {
+            long long backlog = c->acc_fp / c->step_fp;
+            c->dropped += (int)backlog;
+            c->acc_fp %= c->step_fp;
+            break;
+        }
+        c->acc_fp -= c->step_fp;
+        steps++;
+        c->total_steps++;
+    }
+
+    c->acc = (double)c->acc_fp / (double)CLOCK_FP_SCALE;
+    c->alpha = (double)c->acc_fp / (double)c->step_fp;
+    return steps;
 }
 
-int main(void) {
-    Clock c;
-    clock_init(&c, 0.01, 8);
-
-    check("one_step", clock_advance(&c, 0.01) == 1 && c.total_steps == 1);
-    check("alpha_zero", fabs(c.alpha) < 1e-12);
-
-    check("half_step", clock_advance(&c, 0.005) == 0 && fabs(c.alpha - 0.5) < 1e-9);
-    check("completes", clock_advance(&c, 0.005) == 1 && c.total_steps == 2);
-
-    check("two_steps", clock_advance(&c, 0.025) == 2 && fabs(c.alpha - 0.5) < 1e-9);
-
-    Clock big;
-    clock_init(&big, 0.01, 4);
-    int steps = clock_advance(&big, 0.1);
-    check("catchup_capped", steps == 4);
-    check("dropped_recorded", big.dropped == 6);
-    check("alpha_bounded", big.alpha >= 0.0 && big.alpha < 1.0);
-
-    check("negative_rejected", clock_advance(&big, -0.01) == -1);
-
-    Clock z;
-    clock_init(&z, 0.0, 4);
-    check("zero_step_no_div", clock_advance(&z, 0.05) >= 0);
-
-    printf("all_ok=%d\n", failures == 0);
-    return failures == 0 ? 0 : 1;
+int clock_advance(Clock* c, double frame_dt) {
+    if (frame_dt < 0.0) return -1;
+    /* round-to-nearest quantisation on entry, then delegate */
+    return clock_advance_ns(c,
+        (long long)llround(frame_dt * (double)CLOCK_FP_SCALE));
 }
+
+/* uncapped: emit every step the accumulator holds, never drop */
+int clock_drain_ns(Clock* c, long long frame_dt_ns) {
+    if (frame_dt_ns < 0) return -1;
+    if (c->step_fp <= 0) {
+        c->acc = 0.0;
+        c->alpha = 0.0;
+        return 0;
+    }
+    c->acc_fp += frame_dt_ns;
+    int steps = 0;
+    while (c->acc_fp >= c->step_fp) {
+        c->acc_fp -= c->step_fp;
+        steps++;
+        c->total_steps++;
+    }
+    c->acc = (double)c->acc_fp / (double)CLOCK_FP_SCALE;
+    c->alpha = (double)c->acc_fp / (double)c->step_fp;
+    return steps;
+}
+
+int clock_unstep(Clock* c, int n) {
+    if (n < 0 || (long long)n > c->total_steps || c->step_fp <= 0)
+        return -1;
+    c->acc_fp += (long long)n * c->step_fp;
+    c->total_steps -= n;
+    c->acc = (double)c->acc_fp / (double)CLOCK_FP_SCALE;
+    c->alpha = (double)c->acc_fp / (double)c->step_fp;
+    return 0;
+}
+#endif
