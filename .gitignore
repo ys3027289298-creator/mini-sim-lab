@@ -1,0 +1,5 @@
+# build outputs
+/fixedstep/fixedstep
+/pool/pool
+/rng/rng
+*.o
